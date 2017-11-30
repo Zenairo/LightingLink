@@ -8,7 +8,7 @@ namespace LightingLink
     class LightingNodeUtils
     {
 
-        internal static byte[][] fourStripsFromZones(Color c1, Color c2, Color c3, Color c4)
+        internal static byte[][] UpdateFourStrips(Color c1, Color c2, Color c3, Color c4)
         {
             byte[] red = new byte[] {0x00,
                    0x32, 0x00, 0x00, 0x28, 0x00, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c2.R,
@@ -31,7 +31,7 @@ namespace LightingLink
             return new byte[3][] { red, green, blue }; 
         }
 
-        internal static byte[][] sixFansFromZones(Color c1, Color c2, Color c3, Color c4)
+        internal static byte[][] UpdateSixFans(Color c1, Color c2, Color c3, Color c4)
         {
             byte[] red1 = new byte[] {0x00,
                    0x32, 0x01, 0x00, 0x32, 0x00, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R, c1.R,
@@ -72,7 +72,7 @@ namespace LightingLink
             return new byte[6][] { red1, green1, blue1, red2, green2, blue2 };
         }
 
-        public static void firstTransaction(HidDevice device)
+        public static void FirstTransaction(HidDevice device)
         {
             byte[] first1 = new byte[] {0x00,
                    0x38, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -90,7 +90,7 @@ namespace LightingLink
             device.Write(first2);
         }
 
-        public static void beignTransaction(HidDevice device)
+        public static void BeignUpdate(HidDevice device)
         {
             byte[] first1 = new byte[] {0x00,
                    0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -108,7 +108,7 @@ namespace LightingLink
             device.Write(first2);
         }
 
-        public static void submitTransaction(HidDevice device)
+        public static void SubmitUpdate(HidDevice device)
         {
 
             byte[] submit = new byte[] {0x00,
@@ -118,15 +118,6 @@ namespace LightingLink
                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
             device.Write(submit);
-        }
-
-        public static byte[] StringToByteArray(string hex)
-        {
-            hex = hex.Replace(" ", "");
-            return Enumerable.Range(0, hex.Length)
-                             .Where(x => x % 2 == 0)
-                             .Select(x => Convert.ToByte(hex.Substring(x, 2), 16))
-                             .ToArray();
         }
     }
 }
