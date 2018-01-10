@@ -1,7 +1,5 @@
-﻿using HidLibrary;
+﻿using HidSharp;
 using RGB.NET.Core;
-using System;
-using System.Linq;
 
 namespace LightingLink
 {
@@ -72,7 +70,7 @@ namespace LightingLink
             return new byte[6][] { red1, green1, blue1, red2, green2, blue2 };
         }
 
-        public static void FirstTransaction(HidDevice device)
+        public static void FirstTransaction(HidStream device)
         {
             byte[] first1 = new byte[] {0x00,
                    0x38, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -90,7 +88,7 @@ namespace LightingLink
             device.Write(first2);
         }
 
-        public static void BeignUpdate(HidDevice device)
+        public static void BeignUpdate(HidStream device)
         {
             byte[] first1 = new byte[] {0x00,
                    0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -108,7 +106,7 @@ namespace LightingLink
             device.Write(first2);
         }
 
-        public static void SubmitUpdate(HidDevice device)
+        public static void SubmitUpdate(HidStream device)
         {
 
             byte[] submit = new byte[] {0x00,
