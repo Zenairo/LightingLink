@@ -33,7 +33,7 @@ namespace LightingLink
         static Color backIOColor;
         static Color pchColor;
         static Color headerOneColor;
-        static Color headerTwoColor;
+        static Color headerTwoColor; 
 
         static ILocalHueClient bridgeOne;
 
@@ -47,7 +47,6 @@ namespace LightingLink
 
             surface = RGBSurface.Instance;
             surface.Exception += args => Debug.WriteLine(args.Exception.Message);
-            surface.UpdateMode = UpdateMode.Continuous;
             surface.LoadDevices(AsusDeviceProvider.Instance, RGBDeviceType.Mainboard);
             surface.LoadDevices(CorsairDeviceProvider.Instance);
 
@@ -133,6 +132,8 @@ namespace LightingLink
         {
             do
             {
+                surface.Update();
+                auraMb.SyncBack();
                 Color[] boardColor = auraMb.Select(C => C.Color).ToArray();
 
                 backIOColor = boardColor[0];
@@ -140,7 +141,7 @@ namespace LightingLink
                 headerOneColor = boardColor[2];
                 headerTwoColor = boardColor[3];
 
-                System.Threading.Thread.Sleep(15);
+                System.Threading.Thread.Sleep(34);
 
             } while (running);
         }
@@ -156,7 +157,7 @@ namespace LightingLink
                 com1.SetColor(new RGBColor(c1.R, c1.G, c1.B));
 
                 var send1 = hue.SendCommandAsync(com1, new List<string> { "1" });
-                System.Threading.Thread.Sleep(75);
+                System.Threading.Thread.Sleep(80);
 
                 c2 = headerTwoColor;
 
@@ -165,7 +166,7 @@ namespace LightingLink
                 com2.SetColor(new RGBColor(c2.R, c2.G, c2.B));
 
                 var send2 = hue.SendCommandAsync(com2, new List<string> { "2" });
-                System.Threading.Thread.Sleep(75);
+                System.Threading.Thread.Sleep(80);
 
                 c3 = pchColor;
 
@@ -174,7 +175,7 @@ namespace LightingLink
                 com3.SetColor(new RGBColor(c3.R, c3.G, c3.B));
 
                 var send3 = hue.SendCommandAsync(com3, new List<string> { "3" });
-                System.Threading.Thread.Sleep(75);
+                System.Threading.Thread.Sleep(80);
 
                 c4 = headerOneColor;
 
@@ -183,7 +184,7 @@ namespace LightingLink
                 com4.SetColor(new RGBColor(c4.R, c4.G, c4.B));
 
                 var send4 = hue.SendCommandAsync(com4, new List<string> { "4" });
-                System.Threading.Thread.Sleep(75);
+                System.Threading.Thread.Sleep(80);
 
 
             } while (running);
@@ -216,7 +217,7 @@ namespace LightingLink
 
                 LightingNodeUtils.SubmitUpdate(lnp);
 
-                System.Threading.Thread.Sleep(15);
+                System.Threading.Thread.Sleep(34);
 
             } while (running);
         }
@@ -250,7 +251,7 @@ namespace LightingLink
                     }
                 }
 
-                System.Threading.Thread.Sleep(15);
+                System.Threading.Thread.Sleep(34);
 
             } while (running);
         }
@@ -288,7 +289,7 @@ namespace LightingLink
                         }
                     }
 
-                    System.Threading.Thread.Sleep(15);
+                    System.Threading.Thread.Sleep(34);
 
                 } while (running);
             }
@@ -312,7 +313,7 @@ namespace LightingLink
                 headsetStand.ElementAt(7).Color = ColorUtils.colorMixer(c1, c2);
                 headsetStand.ElementAt(8).Color = c1;
 
-                System.Threading.Thread.Sleep(15);
+                System.Threading.Thread.Sleep(34);
 
             } while (running);
         }
