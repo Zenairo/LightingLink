@@ -13,6 +13,11 @@ using Q42.HueApi.ColorConverters;
 using Q42.HueApi.ColorConverters.HSB;
 using Q42.HueApi.NET;
 using Q42.HueApi.Models.Bridge;
+using Q42.HueApi.Streaming;
+using Q42.HueApi.Streaming.Effects;
+using Q42.HueApi.Streaming.Extensions;
+using Q42.HueApi.Streaming.Models;
+using System.Threading;
 
 namespace LightingLink
 {
@@ -25,24 +30,31 @@ namespace LightingLink
         static HidDevice corsairLNP;
         static HidStream lnpStream;
 
+        static OpenConfiguration exclusive;
+
         static AsusMainboardRGBDevice auraMb;
         static CorsairKeyboardRGBDevice corsairKeyboard;
         static CorsairMousepadRGBDevice corsairMousepad;
         static CorsairHeadsetStandRGBDevice corsairHeadsetStand;
 
-        static Color backIOColor;
-        static Color pchColor;
-        static Color headerOneColor;
-        static Color headerTwoColor; 
+        static HueStreaming hueStream;
 
-        static ILocalHueClient bridgeOne;
+        //static Color backIOColor;
+        //static Color pchColor;
+        //static Color headerOneColor;
+        //static Color headerTwoColor;
 
-        static ILocalHueClient bridgeTwo;
+        static Color[] colors;
 
         static void InitializeDevices()
         {
-            corsairLNP = new HidDeviceLoader().GetDevices().Where(d => d.ProductID == 0x0C0B).First();
-            lnpStream = corsairLNP.Open();
+
+            exclusive = new OpenConfiguration();
+            exclusive.SetOption(OpenOption.Exclusive, true);
+            exclusive.SetOption(OpenOption.Interruptible, false);
+
+            corsairLNP = DeviceList.Local.GetHidDevices().Where(d => d.ProductID == 0x0C0B).First();
+            lnpStream = corsairLNP.Open(exclusive);
             LightingNodeUtils.FirstTransaction(lnpStream);
 
             surface = RGBSurface.Instance;
@@ -56,31 +68,14 @@ namespace LightingLink
             corsairMousepad = surface.Devices.OfType<CorsairMousepadRGBDevice>().First();
             corsairHeadsetStand = surface.Devices.OfType<CorsairHeadsetStandRGBDevice>().First();
 
-            IBridgeLocator locator = new HttpBridgeLocator();
-            var locateBridges = locator.LocateBridgesAsync(TimeSpan.FromSeconds(5));
-            IEnumerable<LocatedBridge> bridgeIPs = locateBridges.Result;
-
-            if (bridgeIPs.Where(B => B.BridgeId == "001788fffe678124").Count() > 0)
-            {
-                bridgeOne = new LocalHueClient(bridgeIPs.Where(B => B.BridgeId == "001788fffe678124").First().IpAddress);
-                var registerOne = bridgeOne.RegisterAsync("LightingLink", "WarMachine");
-                //string appKeyOne = registerOne.Result;
-                bridgeOne.Initialize("NnmhRXVqLmBUw93kmIwi8PPCt6QHgWlHwkTYT9NC");
-            }
-
-            if (bridgeIPs.Where(B => B.BridgeId == "001788fffea04d9c").Count() > 0)
-            {
-                bridgeTwo = new LocalHueClient(bridgeIPs.Where(B => B.BridgeId == "001788fffea04d9c").First().IpAddress);
-                var registerTwo = bridgeTwo.RegisterAsync("LightingLink", "WarMachine");
-                //string appKeyTwo = registerTwo.Result;
-                bridgeTwo.Initialize("2b0AIky9S2g1LgbggOgsCdNV8EzE2JS8QfBOCHHv");
-            }
-
             GetAsusColors();
         }
 
-        static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
+            hueStream = new HueStreaming();
+            await hueStream.Start();
+
             Run();
         }
 
@@ -91,25 +86,15 @@ namespace LightingLink
 
             running = true;
 
-
             List<Task> updaters = new List<Task>();
 
             updaters.Add(Task.Factory.StartNew(() => GetAsusColors()));
 
-            if(bridgeOne != null)
-            {
-                updaters.Add(Task.Factory.StartNew(() => UpdateHue(bridgeOne, backIOColor, headerTwoColor, pchColor, headerOneColor)));
-            }
-
-            if (bridgeTwo != null)
-            {
-                updaters.Add(Task.Factory.StartNew(() => UpdateHue(bridgeTwo, backIOColor, headerTwoColor, pchColor, headerOneColor)));
-            }
-
-            updaters.Add(Task.Factory.StartNew(() => UpdateLNP(lnpStream, backIOColor, headerTwoColor, pchColor, headerOneColor)));
-            updaters.Add(Task.Factory.StartNew(() => UpdateKeyboard(corsairKeyboard, backIOColor, pchColor, headerOneColor, headerTwoColor)));
-            updaters.Add(Task.Factory.StartNew(() => UpdateMousepad(corsairMousepad, backIOColor, headerOneColor, pchColor, headerTwoColor)));
-            updaters.Add(Task.Factory.StartNew(() => UpdateHeadsetStand(corsairHeadsetStand, backIOColor, headerOneColor, pchColor, headerTwoColor)));
+            updaters.Add(Task.Factory.StartNew(() => UpdateHue(hueStream.entGroup)));
+            updaters.Add(Task.Factory.StartNew(() => UpdateLNP(lnpStream)));
+            updaters.Add(Task.Factory.StartNew(() => UpdateKeyboard(corsairKeyboard)));
+            updaters.Add(Task.Factory.StartNew(() => UpdateMousepad(corsairMousepad)));
+            updaters.Add(Task.Factory.StartNew(() => UpdateHeadsetStand(corsairHeadsetStand)));
 
             while (running)
             {
@@ -134,70 +119,42 @@ namespace LightingLink
             {
                 surface.Update();
                 auraMb.SyncBack();
-                Color[] boardColor = auraMb.Select(C => C.Color).ToArray();
+                Color[] AScolors = auraMb.Select(C => C.Color).ToArray();
 
-                backIOColor = boardColor[0];
-                pchColor = boardColor[1];
-                headerOneColor = boardColor[2];
-                headerTwoColor = boardColor[3];
+                colors = AScolors;
+                //backIOColor = boardColor[0];
+                //pchColor = boardColor[1];
+                //headerOneColor = boardColor[2];
+                //headerTwoColor = boardColor[3];
 
                 System.Threading.Thread.Sleep(34);
 
             } while (running);
         }
 
-        static void UpdateHue(ILocalHueClient hue, Color c1, Color c2, Color c3, Color c4)
+        static void UpdateHue(StreamingGroup streamingLights)
         {
             do
             {
-                c1 = backIOColor;
-
-                var com1 = new LightCommand();
-                com1.TransitionTime = TimeSpan.FromMilliseconds(150);
-                com1.SetColor(new RGBColor(c1.R, c1.G, c1.B));
-
-                var send1 = hue.SendCommandAsync(com1, new List<string> { "1" });
-                System.Threading.Thread.Sleep(80);
-
-                c2 = headerTwoColor;
-
-                var com2 = new LightCommand();
-                com2.TransitionTime = TimeSpan.FromMilliseconds(150);
-                com2.SetColor(new RGBColor(c2.R, c2.G, c2.B));
-
-                var send2 = hue.SendCommandAsync(com2, new List<string> { "2" });
-                System.Threading.Thread.Sleep(80);
-
-                c3 = pchColor;
-
-                var com3 = new LightCommand();
-                com3.TransitionTime = TimeSpan.FromMilliseconds(150);
-                com3.SetColor(new RGBColor(c3.R, c3.G, c3.B));
-
-                var send3 = hue.SendCommandAsync(com3, new List<string> { "3" });
-                System.Threading.Thread.Sleep(80);
-
-                c4 = headerOneColor;
-
-                var com4 = new LightCommand();
-                com4.TransitionTime = TimeSpan.FromMilliseconds(150);
-                com4.SetColor(new RGBColor(c4.R, c4.G, c4.B));
-
-                var send4 = hue.SendCommandAsync(com4, new List<string> { "4" });
-                System.Threading.Thread.Sleep(80);
-
-
+                var lights = streamingLights.OrderBy(x => new Guid());
+                foreach (StreamingLight light in lights)
+                {
+                    int colInt = streamingLights.IndexOf(light) % 4;
+                    light.SetState(new RGBColor(colors[colInt].R, colors[colInt].G, colors[colInt].B), 1);
+                    Thread.Sleep(5);
+                }
+                //Thread.Sleep(50);
             } while (running);
         }
 
-        static void UpdateLNP(HidStream lnp, Color c1, Color c2, Color c3, Color c4)
+        static void UpdateLNP(HidStream lnp)
         {
             do
             {
-                c1 = backIOColor;
-                c2 = headerTwoColor;
-                c3 = pchColor;
-                c4 = headerOneColor;
+                Color c1 = colors[0];
+                Color c2 = colors[3];
+                Color c3 = colors[1];
+                Color c4 = colors[2];
 
                 LightingNodeUtils.BeignUpdate(lnp);
 
@@ -222,14 +179,14 @@ namespace LightingLink
             } while (running);
         }
 
-        static void UpdateKeyboard(CorsairKeyboardRGBDevice keyboard, Color c1, Color c2, Color c3, Color c4)
+        static void UpdateKeyboard(CorsairKeyboardRGBDevice keyboard)
         {
             do
             {
-                c1 = backIOColor;
-                c2 = headerTwoColor;
-                c3 = pchColor;
-                c4 = headerOneColor;
+                Color c1 = colors[0];
+                Color c2 = colors[3];
+                Color c3 = colors[1];
+                Color c4 = colors[2];
 
                 foreach (Led led in keyboard)
                 {
@@ -256,14 +213,14 @@ namespace LightingLink
             } while (running);
         }
 
-        static void UpdateMousepad(CorsairMousepadRGBDevice mousepad, Color c1, Color c2, Color c3, Color c4)
+        static void UpdateMousepad(CorsairMousepadRGBDevice mousepad)
             {
                 do
                 {
-                    c1 = backIOColor;
-                    c2 = headerTwoColor;
-                    c3 = pchColor;
-                    c4 = headerOneColor;
+                    Color c1 = colors[0];
+                    Color c2 = colors[3];
+                    Color c3 = colors[1];
+                    Color c4 = colors[2];
 
                     for (int i = 0; i < mousepad.Count(); i++)
                     {
@@ -294,14 +251,14 @@ namespace LightingLink
                 } while (running);
             }
 
-        static void UpdateHeadsetStand(CorsairHeadsetStandRGBDevice headsetStand, Color c1, Color c2, Color c3, Color c4)
+        static void UpdateHeadsetStand(CorsairHeadsetStandRGBDevice headsetStand)
         {
             do
             {
-                c1 = backIOColor;
-                c2 = headerTwoColor;
-                c3 = pchColor;
-                c4 = headerOneColor;
+                Color c1 = colors[0];
+                Color c2 = colors[3];
+                Color c3 = colors[1];
+                Color c4 = colors[2];
 
                 headsetStand.ElementAt(0).Color = ColorUtils.colorMixer(ColorUtils.colorMixer(c1, c3), ColorUtils.colorMixer(c2, c4));
                 headsetStand.ElementAt(1).Color = ColorUtils.colorMixer(c4, c1);
@@ -317,5 +274,38 @@ namespace LightingLink
 
             } while (running);
         }
+
+        static void UpdateHueLegacy(ILocalHueClient hue)
+        {
+            /*            IBridgeLocator locator = new HttpBridgeLocator();
+            var locateBridges = locator.LocateBridgesAsync(TimeSpan.FromSeconds(5));
+            IEnumerable<LocatedBridge> bridgeIPs = locateBridges.Result;
+
+            if (bridgeIPs.Where(B => B.BridgeId == "001788fffe678124").Count() > 0)
+            {
+                bridge = new LocalHueClient(bridgeIPs.Where(B => B.BridgeId == "001788fffe678124").First().IpAddress);
+                var registerOne = bridge.RegisterAsync("LightingLink", "WarMachine");
+                //string appKeyOne = registerOne.Result;
+                bridge.Initialize("NnmhRXVqLmBUw93kmIwi8PPCt6QHgWlHwkTYT9NC");
+            }*/
+
+            do
+            {
+                for (int lightNum = 1; lightNum <= 13; lightNum++)
+                {
+                    Color color = colors[lightNum % 4];
+
+                    var com1 = new LightCommand();
+                    com1.TransitionTime = TimeSpan.FromMilliseconds(150);
+                    com1.SetColor(new RGBColor(color.R, color.G, color.B));
+
+                    var send1 = hue.SendCommandAsync(com1, new List<string> { lightNum.ToString() });
+                    System.Threading.Thread.Sleep(70);
+
+                }
+
+            } while (running);
+        }
+
     }
 }
